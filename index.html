@@ -217,7 +217,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script>
 const QUESTIONS = [
   { id:"company",  label:"Company",        q:"What company is this?",                      type:"text" },
@@ -244,18 +244,19 @@ const STATUS_CLASSES = {
 firebase.initializeApp({
   apiKey: "AIzaSyBaVwMsUvOZN1K3o6I8GDaHlyvnNtMAP9c",
   authDomain: "job-t-2dbe8.firebaseapp.com",
+  databaseURL: "https://job-t-2dbe8-default-rtdb.firebaseio.com",
   projectId: "job-t-2dbe8",
   storageBucket: "job-t-2dbe8.firebasestorage.app",
   messagingSenderId: "719925891210",
   appId: "1:719925891210:web:1a7dd86ab448dadc4cdd73"
 });
-const db = firebase.firestore();
-const COL = db.collection("applications");
+const db = firebase.database();
+const COL = db.ref("applications");
 
 let answers = {}, prefilled = {};
 let rows = [];
 
-function save() {} // no-op — Firestore handles persistence
+function save() {} // no-op — Realtime Database handles persistence
 
 function switchTab(id) {
   document.querySelectorAll(".tab").forEach((t,i) => t.classList.toggle("active", ["add","log","dash"][i]===id));
@@ -391,14 +392,14 @@ async function addToLog() {
     date: new Date().toISOString().split("T")[0],
     url: document.getElementById("urlInput").value.trim(),
   };
-  await COL.doc(String(row.id)).set(row);
+  await COL.push(row);
   toast(`Saved: ${row.company}`);
   setStatus("", "");
   resetQuiz();
 }
 
 async function deleteRow(id) {
-  await COL.doc(String(id)).delete();
+  await db.ref("applications/" + id).remove();
 }
 
 function resetQuiz() {
@@ -432,7 +433,7 @@ function renderLog() {
       <td style="color:${r.priority==='High'?'var(--red)':r.priority==='Medium'?'var(--amber)':'var(--text3)'};font-size:12px;">${r.priority}</td>
       <td style="font-family:var(--mono);font-size:12px;">${r.date}</td>
       <td style="font-size:12px;max-width:160px;">${r.notes}</td>
-      <td><button class="del-btn" onclick="deleteRow(${r.id})" title="Remove">×</button></td>
+      <td><button class="del-btn" onclick="deleteRow('${r._key}')" title="Remove">×</button></td>
     </tr>`).join("");
 }
 
@@ -503,8 +504,9 @@ function toast(msg) {
   setTimeout(()=>t.classList.remove("show"), 2800);
 }
 
-COL.onSnapshot(snap => {
-  rows = snap.docs.map(d => d.data());
+COL.on("value", snap => {
+  const val = snap.val() || {};
+  rows = Object.entries(val).map(([key, data]) => ({ ...data, _key: key }));
   rows.sort((a, b) => b.id - a.id);
   updateHeader();
   if (document.getElementById("tab-log").classList.contains("active")) renderLog();
