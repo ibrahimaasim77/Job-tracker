@@ -216,6 +216,8 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 const QUESTIONS = [
   { id:"company",  label:"Company",        q:"What company is this?",                      type:"text" },
@@ -239,10 +241,21 @@ const STATUS_CLASSES = {
   "Rejected":"b-rejected","Withdrawn":"b-withdrawn"
 };
 
-let answers = {}, prefilled = {};
-let rows = JSON.parse(localStorage.getItem("iat_rows") || "[]");
+firebase.initializeApp({
+  apiKey: "AIzaSyBaVwMsUvOZN1K3o6I8GDaHlyvnNtMAP9c",
+  authDomain: "job-t-2dbe8.firebaseapp.com",
+  projectId: "job-t-2dbe8",
+  storageBucket: "job-t-2dbe8.firebasestorage.app",
+  messagingSenderId: "719925891210",
+  appId: "1:719925891210:web:1a7dd86ab448dadc4cdd73"
+});
+const db = firebase.firestore();
+const COL = db.collection("applications");
 
-function save() { localStorage.setItem("iat_rows", JSON.stringify(rows)); }
+let answers = {}, prefilled = {};
+let rows = [];
+
+function save() {} // no-op — Firestore handles persistence
 
 function switchTab(id) {
   document.querySelectorAll(".tab").forEach((t,i) => t.classList.toggle("active", ["add","log","dash"][i]===id));
@@ -363,7 +376,7 @@ function getVal(id) {
   return answers[id] || "";
 }
 
-function addToLog() {
+async function addToLog() {
   const company = getVal("company");
   if (!company) { setStatus("At least fill in the company name.", "err"); return; }
   const row = {
@@ -378,17 +391,14 @@ function addToLog() {
     date: new Date().toISOString().split("T")[0],
     url: document.getElementById("urlInput").value.trim(),
   };
-  rows.unshift(row);
-  save();
+  await COL.doc(String(row.id)).set(row);
   toast(`Saved: ${row.company}`);
   setStatus("", "");
   resetQuiz();
-  updateHeader();
 }
 
-function deleteRow(id) {
-  rows = rows.filter(r => r.id !== id);
-  save(); renderLog(); updateHeader();
+async function deleteRow(id) {
+  await COL.doc(String(id)).delete();
 }
 
 function resetQuiz() {
@@ -493,7 +503,13 @@ function toast(msg) {
   setTimeout(()=>t.classList.remove("show"), 2800);
 }
 
-updateHeader();
+COL.onSnapshot(snap => {
+  rows = snap.docs.map(d => d.data());
+  rows.sort((a, b) => b.id - a.id);
+  updateHeader();
+  if (document.getElementById("tab-log").classList.contains("active")) renderLog();
+  if (document.getElementById("tab-dash").classList.contains("active")) renderDash();
+});
 </script>
 </body>
 </html>
